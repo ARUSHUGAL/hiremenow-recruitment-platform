@@ -1,4 +1,6 @@
 import { useState } from "react";
+import RecruiterFilters from "../components/RecruiterFilters";
+import CandidateList from "../components/CandidateList";
 
 export default function Recruiter() {
   const [profile, setProfile] = useState({
@@ -20,6 +22,9 @@ export default function Recruiter() {
 
   const [isActive, setIsActive] = useState(false);
   const [currentMatch, setCurrentMatch] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showCandidateList, setShowCandidateList] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState(null);
 
   const mockCandidates = [
     { id: 1, name: "Alex Johnson", skills: ["JavaScript", "React", "Node.js"], experience: 3, location: "San Francisco", matchScore: 87 },
@@ -30,6 +35,16 @@ export default function Recruiter() {
   const findMatch = () => {
     const randomCandidate = mockCandidates[Math.floor(Math.random() * mockCandidates.length)];
     setCurrentMatch(randomCandidate);
+  };
+
+  const handleApplyFilters = (filters: any) => {
+    setAppliedFilters(filters);
+    setShowCandidateList(true);
+  };
+
+  const handleStartInterview = (candidate: any) => {
+    setCurrentMatch(candidate);
+    setShowCandidateList(false);
   };
 
   return (
@@ -119,13 +134,19 @@ export default function Recruiter() {
             </div>
           </div>
           
-          <div className="text-center">
+          <div className="flex justify-center space-x-4">
+            <button 
+              onClick={() => setShowFilters(true)}
+              className="bg-gradient-to-r from-blue-500 to-indigo-600 px-8 py-4 rounded-full text-xl font-bold hover:scale-105 transition-transform"
+            >
+              🔍 Filter Candidates
+            </button>
             <button 
               onClick={findMatch}
               disabled={!isActive}
               className="bg-gradient-to-r from-pink-500 to-purple-600 px-8 py-4 rounded-full text-xl font-bold hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              🎯 Find Match
+              🎯 Find Random Match
             </button>
           </div>
         </div>
@@ -185,6 +206,23 @@ export default function Recruiter() {
             <p className="text-white/80">Hired This Week</p>
           </div>
         </div>
+
+        {/* Filter Modal */}
+        {showFilters && (
+          <RecruiterFilters
+            onClose={() => setShowFilters(false)}
+            onApplyFilters={handleApplyFilters}
+          />
+        )}
+
+        {/* Candidate List Modal */}
+        {showCandidateList && appliedFilters && (
+          <CandidateList
+            filters={appliedFilters}
+            onClose={() => setShowCandidateList(false)}
+            onStartInterview={handleStartInterview}
+          />
+        )}
       </div>
     </div>
   );

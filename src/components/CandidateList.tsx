@@ -730,10 +730,16 @@ export default function CandidateList({ filters, onClose, onStartInterview }: Ca
         case 'matchScore':
           return b.matchScore - a.matchScore;
         case 'experience':
-          return parseInt(b.experience) - parseInt(a.experience);
+          const aExpMatch = a.experience.match(/(\d+)/);
+          const bExpMatch = b.experience.match(/(\d+)/);
+          const aExpYears = aExpMatch ? parseInt(aExpMatch[1]) : 0;
+          const bExpYears = bExpMatch ? parseInt(bExpMatch[1]) : 0;
+          return bExpYears - aExpYears;
         case 'salary':
-          const aSalary = parseInt(a.salary.match(/\$(\d+),?(\d+)?/)?.[1]?.replace(/,/g, '') || '0');
-          const bSalary = parseInt(b.salary.match(/\$(\d+),?(\d+)?/)?.[1]?.replace(/,/g, '') || '0');
+          const aSalaryMatch = a.salary.match(/\$(\d{1,3}(?:,\d{3})*)/);
+          const bSalaryMatch = b.salary.match(/\$(\d{1,3}(?:,\d{3})*)/);
+          const aSalary = aSalaryMatch ? parseInt(aSalaryMatch[1].replace(/,/g, '')) : 0;
+          const bSalary = bSalaryMatch ? parseInt(bSalaryMatch[1].replace(/,/g, '')) : 0;
           return bSalary - aSalary;
         case 'name':
           return a.name.localeCompare(b.name);
