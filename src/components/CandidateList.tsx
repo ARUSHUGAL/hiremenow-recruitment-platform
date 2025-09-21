@@ -17,6 +17,7 @@ interface Candidate {
   hasLeadership?: boolean;
   lastActive: string;
   avatar: string;
+  calculatedMatchScore?: number;
 }
 
 interface CandidateListProps {
@@ -601,134 +602,200 @@ export default function CandidateList({ filters, onClose, onStartInterview }: Ca
   }, []);
 
   useEffect(() => {
-    // Apply filters
-    let filtered = [...candidates];
+    // Smart matching system - finds candidates with similar qualities
+    const calculateMatchScore = (candidate: Candidate): number => {
+      let score = 0;
+      let totalWeight = 0;
 
-    // Experience filter - Fix: Extract number from "X years" string
-    if (filters.minExperience || filters.maxExperience) {
-      filtered = filtered.filter(candidate => {
-        // Extract number from "5 years" format
+      // Experience matching (weight: 25%)
+      if (filters.minExperience || filters.maxExperience) {
         const expMatch = candidate.experience.match(/(\d+)/);
         const expYears = expMatch ? parseInt(expMatch[1]) : 0;
         const minExp = parseInt(filters.minExperience) || 0;
         const maxExp = parseInt(filters.maxExperience) || 20;
-        return expYears >= minExp && expYears <= maxExp;
-      });
-    }
-
-    // Required skills filter
-    if (filters.requiredSkills && filters.requiredSkills.length > 0) {
-      filtered = filtered.filter(candidate =>
-        filters.requiredSkills.every((skill: string) =>
-          candidate.skills.includes(skill)
-        )
-      );
-    }
-
-    // Preferred skills filter
-    if (filters.preferredSkills && filters.preferredSkills.length > 0) {
-      filtered = filtered.filter(candidate =>
-        filters.preferredSkills.some((skill: string) =>
-          candidate.skills.includes(skill)
-        )
-      );
-    }
-
-    // Location filter
-    if (filters.location && filters.location.trim()) {
-      filtered = filtered.filter(candidate =>
-        candidate.location.toLowerCase().includes(filters.location.toLowerCase())
-      );
-    }
-
-    // Remote work filter
-    if (filters.remoteWork && filters.remoteWork !== 'any') {
-      filtered = filtered.filter(candidate => {
-        if (filters.remoteWork === 'required') {
-          return candidate.location.toLowerCase().includes('remote');
-        } else if (filters.remoteWork === 'not-required') {
-          return !candidate.location.toLowerCase().includes('remote');
+        
+        if (expYears >= minExp && expYears <= maxExp) {
+          score += 25; // Perfect match
+        } else if (expYears >= minExp - 1 && expYears <= maxExp + 1) {
+          score += 20; // Close match
+        } else if (expYears >= minExp - 2 && expYears <= maxExp + 2) {
+          score += 15; // Somewhat close
+        } else {
+          score += 5; // Still some points for having experience
         }
-        return true;
-      });
-    }
+        totalWeight += 25;
+      }
 
-    // Salary filter - Fix: Better regex for salary parsing
-    if (filters.minSalary || filters.maxSalary) {
-      filtered = filtered.filter(candidate => {
-        // Extract salary numbers from "$120,000 - $150,000" format
+      // Required skills matching (weight: 30%)
+      if (filters.requiredSkills && filters.requiredSkills.length > 0) {
+        const matchingSkills = filters.requiredSkills.filter((skill: string) =>
+          candidate.skills.includes(skill)
+        );
+        const skillMatchPercentage = (matchingSkills.length / filters.requiredSkills.length) * 30;
+        score += skillMatchPercentage;
+        totalWeight += 30;
+      }
+
+      // Preferred skills matching (weight: 20%)
+      if (filters.preferredSkills && filters.preferredSkills.length > 0) {
+        const matchingSkills = filters.preferredSkills.filter((skill: string) =>
+          candidate.skills.includes(skill)
+        );
+        const skillMatchPercentage = (matchingSkills.length / filters.preferredSkills.length) * 20;
+        score += skillMatchPercentage;
+        totalWeight += 20;
+      }
+
+      // Location matching (weight: 10%)
+      if (filters.location && filters.location.trim()) {
+        const candidateLocation = candidate.location.toLowerCase();
+        const filterLocation = filters.location.toLowerCase();
+        
+        if (candidateLocation.includes(filterLocation)) {
+          score += 10; // Exact match
+        } else if (candidateLocation.includes(filterLocation.split(',')[0])) {
+          score += 7; // City match
+        } else if (candidateLocation.includes('remote') && filterLocation.includes('remote')) {
+          score += 8; // Both remote
+        } else {
+          score += 3; // Some points for having a location
+        }
+        totalWeight += 10;
+      }
+
+      // Remote work matching (weight: 5%)
+      if (filters.remoteWork && filters.remoteWork !== 'any') {
+        const isRemote = candidate.location.toLowerCase().includes('remote');
+        if ((filters.remoteWork === 'required' && isRemote) || 
+            (filters.remoteWork === 'not-required' && !isRemote)) {
+          score += 5;
+        } else {
+          score += 2; // Partial points
+        }
+        totalWeight += 5;
+      }
+
+      // Salary matching (weight: 15%)
+      if (filters.minSalary || filters.maxSalary) {
         const salaryMatch = candidate.salary.match(/\$(\d{1,3}(?:,\d{3})*)/g);
         if (salaryMatch && salaryMatch.length >= 1) {
           const minSalary = parseInt(salaryMatch[0].replace(/[$,]/g, ''));
           const maxSalary = salaryMatch[1] ? parseInt(salaryMatch[1].replace(/[$,]/g, '')) : minSalary;
           const filterMin = parseInt(filters.minSalary) || 0;
           const filterMax = parseInt(filters.maxSalary) || 999999;
-          return maxSalary >= filterMin && minSalary <= filterMax;
+          
+          if (maxSalary >= filterMin && minSalary <= filterMax) {
+            score += 15; // Perfect match
+          } else if (maxSalary >= filterMin * 0.8 && minSalary <= filterMax * 1.2) {
+            score += 12; // Close match
+          } else if (maxSalary >= filterMin * 0.6 && minSalary <= filterMax * 1.4) {
+            score += 8; // Somewhat close
+          } else {
+            score += 3; // Still some points
+          }
         }
-        return true;
-      });
-    }
+        totalWeight += 15;
+      }
 
-    // Education filter
-    if (filters.educationLevel && filters.educationLevel !== 'any') {
-      filtered = filtered.filter(candidate => {
+      // Education matching (weight: 8%)
+      if (filters.educationLevel && filters.educationLevel !== 'any') {
         const education = candidate.education.toLowerCase();
+        let educationScore = 0;
+        
         switch (filters.educationLevel) {
           case 'high-school':
-            return education.includes('high school');
+            educationScore = education.includes('high school') ? 8 : 2;
+            break;
           case 'bachelor':
-            return education.includes('bachelor');
+            educationScore = education.includes('bachelor') ? 8 : 
+                           (education.includes('master') || education.includes('phd')) ? 6 : 2;
+            break;
           case 'master':
-            return education.includes('master');
+            educationScore = education.includes('master') ? 8 : 
+                           education.includes('phd') ? 7 : 
+                           education.includes('bachelor') ? 5 : 2;
+            break;
           case 'phd':
-            return education.includes('phd') || education.includes('doctor');
-          default:
-            return true;
+            educationScore = education.includes('phd') || education.includes('doctor') ? 8 : 
+                           education.includes('master') ? 6 : 
+                           education.includes('bachelor') ? 4 : 2;
+            break;
         }
-      });
-    }
+        score += educationScore;
+        totalWeight += 8;
+      }
 
-    // Availability filter
-    if (filters.availability && filters.availability !== 'any') {
-      filtered = filtered.filter(candidate => {
+      // Availability matching (weight: 5%)
+      if (filters.availability && filters.availability !== 'any') {
         const availability = candidate.availability.toLowerCase();
+        let availabilityScore = 0;
+        
         switch (filters.availability) {
           case 'immediate':
-            return availability.includes('immediate');
+            availabilityScore = availability.includes('immediate') ? 5 : 
+                              availability.includes('2 weeks') ? 4 : 
+                              availability.includes('1 month') ? 3 : 2;
+            break;
           case '2-weeks':
-            return availability.includes('2 weeks');
+            availabilityScore = availability.includes('2 weeks') ? 5 : 
+                              availability.includes('immediate') ? 4 : 
+                              availability.includes('1 month') ? 3 : 2;
+            break;
           case '1-month':
-            return availability.includes('1 month');
+            availabilityScore = availability.includes('1 month') ? 5 : 
+                              availability.includes('2 weeks') ? 4 : 
+                              availability.includes('immediate') ? 3 : 2;
+            break;
           case '2-months':
-            return availability.includes('2 months');
-          default:
-            return true;
+            availabilityScore = availability.includes('2 months') ? 5 : 
+                              availability.includes('1 month') ? 4 : 3;
+            break;
         }
-      });
-    }
+        score += availabilityScore;
+        totalWeight += 5;
+      }
 
-    // Additional criteria
-    if (filters.hasPortfolio) {
-      filtered = filtered.filter(candidate => candidate.hasPortfolio);
-    }
-    if (filters.hasCertifications) {
-      filtered = filtered.filter(candidate => candidate.hasCertifications);
-    }
-    if (filters.hasOpenSource) {
-      filtered = filtered.filter(candidate => candidate.hasOpenSource);
-    }
-    if (filters.hasLeadership) {
-      filtered = filtered.filter(candidate => candidate.hasLeadership);
-    }
+      // Additional criteria matching (weight: 2% each)
+      if (filters.hasPortfolio && candidate.hasPortfolio) score += 2;
+      if (filters.hasCertifications && candidate.hasCertifications) score += 2;
+      if (filters.hasOpenSource && candidate.hasOpenSource) score += 2;
+      if (filters.hasLeadership && candidate.hasLeadership) score += 2;
+      
+      if (filters.hasPortfolio || filters.hasCertifications || filters.hasOpenSource || filters.hasLeadership) {
+        totalWeight += 8;
+      }
 
-    setFilteredCandidates(filtered);
+      // Calculate final percentage
+      const finalScore = totalWeight > 0 ? (score / totalWeight) * 100 : 0;
+      return Math.round(finalScore);
+    };
+
+    // Calculate match scores for all candidates
+    const candidatesWithScores = candidates.map(candidate => ({
+      ...candidate,
+      calculatedMatchScore: calculateMatchScore(candidate)
+    }));
+
+    // Filter candidates with at least 30% match score
+    const filtered = candidatesWithScores.filter(candidate => 
+      candidate.calculatedMatchScore >= 30
+    );
+
+    // Sort by calculated match score (highest first)
+    const sorted = filtered.sort((a, b) => b.calculatedMatchScore - a.calculatedMatchScore);
+
+    // If no candidates meet 30% threshold, show top 10 candidates anyway
+    const finalCandidates = sorted.length > 0 ? sorted : 
+      candidatesWithScores.sort((a, b) => b.calculatedMatchScore - a.calculatedMatchScore).slice(0, 10);
+
+    setFilteredCandidates(finalCandidates);
   }, [candidates, filters]);
 
   const sortCandidates = (candidates: Candidate[]) => {
     return [...candidates].sort((a, b) => {
       switch (sortBy) {
         case 'matchScore':
-          return b.matchScore - a.matchScore;
+          return (b.calculatedMatchScore || b.matchScore) - (a.calculatedMatchScore || a.matchScore);
         case 'experience':
           const aExpMatch = a.experience.match(/(\d+)/);
           const bExpMatch = b.experience.match(/(\d+)/);
@@ -774,8 +841,13 @@ export default function CandidateList({ filters, onClose, onStartInterview }: Ca
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-3xl font-bold">👥 Filtered Candidates</h2>
-            <p className="text-gray-600 mt-2">{filteredCandidates.length} candidates found</p>
+            <h2 className="text-3xl font-bold">🎯 Smart Matched Candidates</h2>
+            <p className="text-gray-600 mt-2">
+              {filteredCandidates.length} candidates found with {filteredCandidates.length > 0 ? (filteredCandidates[0].calculatedMatchScore || filteredCandidates[0].matchScore) : 0}%+ match score
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              💡 Showing candidates with similar qualities when exact matches aren't available
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -815,8 +887,8 @@ export default function CandidateList({ filters, onClose, onStartInterview }: Ca
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <h3 className="text-xl font-bold text-gray-900">{candidate.name}</h3>
-                      <span className={`px-2 py-1 rounded-full text-sm font-medium ${getMatchScoreColor(candidate.matchScore)}`}>
-                        {candidate.matchScore}% match
+                      <span className={`px-2 py-1 rounded-full text-sm font-medium ${getMatchScoreColor(candidate.calculatedMatchScore || candidate.matchScore)}`}>
+                        {candidate.calculatedMatchScore || candidate.matchScore}% match
                       </span>
                     </div>
                     <p className="text-lg text-gray-700 mb-2">{candidate.title}</p>
@@ -869,9 +941,18 @@ export default function CandidateList({ filters, onClose, onStartInterview }: Ca
 
         {filteredCandidates.length === 0 && (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-bold text-gray-700 mb-2">No candidates found</h3>
-            <p className="text-gray-600">Try adjusting your filters to find more candidates.</p>
+            <div className="text-6xl mb-4">🤔</div>
+            <h3 className="text-xl font-bold text-gray-700 mb-2">No candidates found with 30%+ match</h3>
+            <p className="text-gray-600 mb-4">Try adjusting your filters to find more candidates.</p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+              <h4 className="font-semibold text-blue-800 mb-2">💡 Smart Matching Tips:</h4>
+              <ul className="text-sm text-blue-700 text-left space-y-1">
+                <li>• Reduce required skills to 1-2 core skills</li>
+                <li>• Expand experience range by 1-2 years</li>
+                <li>• Try broader location or "Remote"</li>
+                <li>• Increase salary range by 20-30%</li>
+              </ul>
+            </div>
           </div>
         )}
 
