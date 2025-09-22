@@ -107,30 +107,6 @@ A modern, intelligent recruitment platform that revolutionizes the hiring proces
    npm run dev
    ```
 
-## 📁 Project Structure
-
-```
-hiremenow/
-├── frontend/                 # React frontend application
-│   ├── src/
-│   │   ├── components/      # Reusable UI components
-│   │   ├── pages/           # Page components
-│   │   ├── services/        # API and business logic
-│   │   ├── contexts/        # React contexts
-│   │   ├── types/           # TypeScript type definitions
-│   │   └── config/          # Configuration files
-│   ├── public/              # Static assets
-│   └── package.json
-├── backend/                 # Node.js backend API
-│   ├── src/
-│   │   ├── routes/          # API routes
-│   │   ├── services/        # Business logic services
-│   │   ├── middleware/      # Express middleware
-│   │   ├── types/           # TypeScript types
-│   │   └── utils/           # Utility functions
-│   └── package.json
-└── README.md
-```
 
 ## 🎯 Core Components
 
@@ -207,10 +183,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - React and TypeScript communities
 - Tailwind CSS for the design system
 
-## 📞 Support
-
-For support, email support@hiremenow.com or join our Slack channel.
-
 ---
 
-**Built with ❤️ by the HireMeNow team**
+**Built with ❤️ by the Pranjal and Arush**
